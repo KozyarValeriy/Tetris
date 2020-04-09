@@ -1,1 +1,1 @@
-python tetris_4.py
+python main.py

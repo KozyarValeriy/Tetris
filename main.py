@@ -37,6 +37,7 @@ import time
 import random
 import copy
 from pynput.keyboard import Key, Listener
+# from threading import Thread
 
 import tetris_classes
 
@@ -45,12 +46,13 @@ time_func = time.perf_counter if sys.platform.startswith('win') else time.time
 
 # начальные значения переменных
 _grid = []
-_point = None
-_current_figure = None
-_next_figure = None
+_point = (0, 0)
+_current_figure = tetris_classes.Figure1()
+_next_figure = tetris_classes.Figure1()
 _delay = 0.5
 _step = 0
 _score = 0
+_is_work = True
 
 # константы
 FIGURES = (tetris_classes.Figure1, tetris_classes.Figure2, tetris_classes.Figure3, tetris_classes.Figure4,
@@ -70,36 +72,44 @@ def main(size: tuple):
 
     :param size: размеры игрового поля.
     """
-    global _point, _delay, _grid, _current_figure, _next_figure, _score, _step
+    global _point, _delay, _grid, _current_figure, _next_figure, _score, _step, _is_work
     middle = size[0] // 2
     _grid = set_backend(size)
     screen_clear()
     listener = None
+    # screen_update = Thread(target=screen_timer, name='Screen update')
     # next_figure = None
     # step = score = 0
     try:
+        # запуск прослушки нажатия на клавиатуру
         listener = Listener(on_press=on_press)
         listener.start()
         while True:
+            # цикл создания фигур и очистки поля после падения фигуры
             _point = (middle, 0)
             _current_figure, _next_figure = add_new_figure(_next_figure)
+            # if not screen_update.is_alive():
+            #     screen_update.start()
             current_coord = _current_figure.coordinate(_point)
             print_field(current_coord, _grid, _score, _step, _current_figure.angle, _current_figure.symbol)
             while True:
+                # цикл с изменением положения фигуры на поле
                 if timer(_delay):
                     _step += 1
                     _delay = 0.5
-                    # _point = (_point[0], _point[1] + 1)
+                    # проверяем, допустима ли следуюущая позиция для фигуры
                     if _current_figure.check_position((_point[0], _point[1] + 1), _grid):
                         _point = (_point[0], _point[1] + 1)
                         current_coord = _current_figure.coordinate(_point)
                         print_field(current_coord, _grid, _score, _step, _current_figure.angle, _current_figure.symbol)
                     else:
-                        # _point = (_point[0], _point[1] - 1)
                         break
+            # получаем координаты фигуры в конечном положении
             current_coord = _current_figure.coordinate(_point)
+            # запускаем заморозку фигуры и поиск и удаление полных слоев
             frost_figure(current_coord, _grid)
             _score = remove_layer(_grid, _score)
+            # если в конце верхний слой не пустой, значик игра закончена
             if not all(el == ' ' for el in _grid[0][1:-1]):
                 current_coord = _current_figure.coordinate(_point)
                 print_field(current_coord, _grid, _score, _step, _current_figure.angle, _current_figure.symbol)
@@ -116,6 +126,20 @@ def main(size: tuple):
     finally:
         if listener is not None:
             listener.stop()
+        _is_work = False
+
+
+def screen_timer(delay: float = 0.5):
+    """ Функция для обновления игрового поля на экране
+
+    :param delay: частота обноыления игрового поля
+    """
+    start = time_func()
+    while _is_work:
+        if time_func() - start > delay:
+            current_coord = _current_figure.coordinate(_point)
+            print_field(current_coord, _grid, _score, _step, _current_figure.angle, _current_figure.symbol)
+            start = time_func()
 
 
 def set_backend(size: tuple) -> list:
